@@ -58,7 +58,7 @@ let
 
     x86_64-linux = {
       arch = "64";
-      sha256 = "sha256-R6mejxuxSZv37nyjnt/oGvgqCw1pULCHCWnlw+pq8iY=";
+      sha256 = "sha256-PthETmSLehg6eWpdDihH1juwiyZdJvzr+qyG2YYuEZI=";
     };
   }.${stdenv.hostPlatform.system} or (throw "Unsupported system: ${stdenv.hostPlatform.system}");
 
