@@ -67,7 +67,7 @@ stdenv.mkDerivation rec {
   inherit pname version meta;
 
   src = fetchurl {
-    url = "https://dl.pstmn.io/download/version/${version}/linux${dist.arch}";
+    url = "https://dl.pstmn.io/download/version/${version}/linux_${dist.arch}";
     inherit (dist) sha256;
     name = "${pname}-${version}.tar.gz";
   };
