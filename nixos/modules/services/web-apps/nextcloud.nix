@@ -28,6 +28,7 @@ let
   phpPackage = cfg.phpPackage.buildEnv {
     extensions = { enabled, all }:
       (with all; enabled
+        ++ [ bz2 intl sodium ] # recommended
         ++ optional cfg.enableImagemagick imagick
         # Optionally enabled depending on caching settings
         ++ optional cfg.caching.apcu apcu
@@ -61,7 +62,9 @@ let
   pgsqlLocal = cfg.database.createLocally && cfg.config.dbtype == "pgsql";
 
   # https://github.com/nextcloud/documentation/pull/11179
-  ocmProviderIsNotAStaticDirAnymore = versionAtLeast cfg.package.version "27.1.2";
+  ocmProviderIsNotAStaticDirAnymore = versionAtLeast cfg.package.version "27.1.2"
+    || (versionOlder cfg.package.version "27.0.0"
+      && versionAtLeast cfg.package.version "26.0.8");
 
 in {
 
@@ -188,15 +191,10 @@ in {
     package = mkOption {
       type = types.package;
       description = lib.mdDoc "Which package to use for the Nextcloud instance.";
-      relatedPackages = [ "nextcloud26" "nextcloud27" ];
+      relatedPackages = [ "nextcloud26" "nextcloud27" "nextcloud28" ];
     };
-    phpPackage = mkOption {
-      type = types.package;
-      relatedPackages = [ "php81" "php82" ];
-      defaultText = "pkgs.php";
-      description = lib.mdDoc ''
-        PHP package to use for Nextcloud.
-      '';
+    phpPackage = mkPackageOption pkgs "php" {
+      example = "php82";
     };
 
     maxUploadSize = mkOption {
@@ -243,7 +241,7 @@ in {
     };
 
     phpOptions = mkOption {
-      type = types.attrsOf types.str;
+      type = with types; attrsOf (oneOf [ str int ]);
       defaultText = literalExpression (generators.toPretty { } defaultPHPSettings);
       description = lib.mdDoc ''
         Options for PHP's php.ini file for nextcloud.
@@ -682,7 +680,7 @@ in {
 
   config = mkIf cfg.enable (mkMerge [
     { warnings = let
-        latest = 27;
+        latest = 28;
         upgradeWarning = major: nixos:
           ''
             A legacy Nextcloud install (from before NixOS ${nixos}) may be installed.
@@ -703,7 +701,8 @@ in {
         '')
         ++ (optional (versionOlder cfg.package.version "25") (upgradeWarning 24 "22.11"))
         ++ (optional (versionOlder cfg.package.version "26") (upgradeWarning 25 "23.05"))
-        ++ (optional (versionOlder cfg.package.version "27") (upgradeWarning 26 "23.11"));
+        ++ (optional (versionOlder cfg.package.version "27") (upgradeWarning 26 "23.11"))
+        ++ (optional (versionOlder cfg.package.version "28") (upgradeWarning 27 "24.05"));
 
       services.nextcloud.package = with pkgs;
         mkDefault (
@@ -713,15 +712,13 @@ in {
               nextcloud defined in an overlay, please set `services.nextcloud.package` to
               `pkgs.nextcloud`.
             ''
-          else if versionOlder stateVersion "22.11" then nextcloud24
           else if versionOlder stateVersion "23.05" then nextcloud25
           else if versionOlder stateVersion "23.11" then nextcloud26
-          else nextcloud27
+          else if versionOlder stateVersion "24.05" then nextcloud27
+          else nextcloud28
         );
 
-      services.nextcloud.phpPackage =
-        if versionOlder cfg.package.version "26" then pkgs.php81
-        else pkgs.php82;
+      services.nextcloud.phpPackage = pkgs.php82;
 
       services.nextcloud.phpOptions = mkMerge [
         (mapAttrs (const mkOptionDefault) defaultPHPSettings)
@@ -1134,10 +1131,13 @@ in {
               fastcgi_read_timeout ${builtins.toString cfg.fastcgiTimeout}s;
             '';
           };
-          "~ \\.(?:css|js|mjs|svg|gif|png|jpg|jpeg|ico|wasm|tflite|map|html|ttf|bcmap|mp4|webm)$".extraConfig = ''
+          "~ \\.(?:css|js|mjs|svg|gif|png|jpg|jpeg|ico|wasm|tflite|map|html|ttf|bcmap|mp4|webm|ogg|flac)$".extraConfig = ''
             try_files $uri /index.php$request_uri;
             expires 6M;
             access_log off;
+            location ~ \.mjs$ {
+              default_type text/javascript;
+            }
             location ~ \.wasm$ {
               default_type application/wasm;
             }
